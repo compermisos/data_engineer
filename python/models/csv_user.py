@@ -1,7 +1,15 @@
-from pydantic import BaseModel, EmailStr, PositiveInt
+from pydantic import BaseModel, EmailStr, PositiveInt, Field, field_validator
 
 # 1. Define your schema
 class User(BaseModel):
     name: str
-    age: PositiveInt
-    email: EmailStr
+    age: PositiveInt = None
+    email: EmailStr = None
+
+    @field_validator("age", "email" , mode="before")
+    @classmethod
+    def empty_string_to_none(cls, v):
+        # Convert empty CSV cells to None so Optional type works
+        if v == "":
+            return None
+        return v
