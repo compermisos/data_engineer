@@ -1,6 +1,6 @@
 import csv
 from pydantic import  ValidationError
-import models/user_csv as csv_user
+import models.user_csv as csv_user
 
 
 # 2. Read and validate rows
