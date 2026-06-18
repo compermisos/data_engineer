@@ -2,7 +2,7 @@ import sys, csv
 from pydantic import  ValidationError
 from models.csv_user import User
 
-def validar_csv(fileName: str) -> none:
+def validar_csv(fileName: str) -> None:
     # 2. Read and validate rows
     valid_users = []
 
