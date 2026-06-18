@@ -13,3 +13,7 @@ class User(BaseModel):
         if v == "":
             return None
         return v
+
+if __name__ == "__main__":
+    user_model_schema = User.model_json_schema()  
+    print(json.dumps(user_model_schema, indent=2))
