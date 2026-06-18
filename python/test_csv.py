@@ -22,6 +22,6 @@ def validar_csv(fileName: str) -> none:
 if __name__ == "__main__":
     argc = len(sys.argv) 
     filename = "users.csv"
-    if argc > 1
+    if argc > 1:
         filename = sys.argv[1]
     validar_csv(filename)  
