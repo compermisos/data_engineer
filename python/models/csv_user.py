@@ -3,8 +3,8 @@ from pydantic import BaseModel, EmailStr, PositiveInt, Field, field_validator
 # 1. Define your schema
 class User(BaseModel):
     name: str
-    age: PositiveInt = None
-    email: EmailStr = None
+    age: PositiveInt | None = None
+    email: EmailStr | None = None
 
     @field_validator("age", "email" , mode="before")
     @classmethod
