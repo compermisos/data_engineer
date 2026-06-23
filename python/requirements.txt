@@ -1,0 +1,4 @@
+datamodel_code_generator==0.64.0
+pipreqs==0.5.0
+protobuf==7.35.1
+pydantic==2.13.4
