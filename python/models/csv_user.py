@@ -1,3 +1,4 @@
+import json
 from pydantic import BaseModel, EmailStr, PositiveInt, Field, field_validator
 
 # 1. Define your schema
