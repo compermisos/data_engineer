@@ -124,7 +124,39 @@ def process_logs_and_stream(input_file_path: str, project_id: str, dataset_id: s
         stream_to_bigquery(client, table_id, batch)
 
     print(f"\nProceso finalizado. Total de registros procesados e insertados: {total_processed}")
+from google.cloud import bigquery
 
+def generar_esquema_bq(modelo: type[BaseModel]) -> list[bigquery.SchemaField]:
+    # Mapeo de tipos de Python/Pydantic a BigQuery
+    bq_type_mapping = {
+        str: "STRING",
+        int: "INTEGER",
+        float: "FLOAT",
+        bool: "BOOLEAN",
+        datetime: "TIMESTAMP",
+        IPvAnyAddress: "STRING"
+    }
+
+    schema = []
+    
+    for nombre_campo, field_info in modelo.model_fields.items():
+        tipo_anotacion = field_info.annotation
+        
+        es_opcional = get_origin(tipo_anotacion) is Union and type(None) in get_args(tipo_anotacion)
+        tipo_base = get_args(tipo_anotacion)[0] if es_opcional else tipo_anotacion
+        
+        # Obtener el tipo BQ correspondiente
+        bq_type = bq_type_mapping.get(tipo_base, "STRING")
+        
+        # Si es opcional, el modo es NULLABLE, de lo contrario REQUIRED
+        bq_mode = "NULLABLE" if es_opcional or not field_info.is_required() else "REQUIRED"
+        
+        schema.append(bigquery.SchemaField(nombre_campo, bq_type, mode=bq_mode))
+        
+    return schema
+
+# Uso:
+# bq_schema_dinamico = generar_esquema_bq(ApacheLog)
 # Bloque de ejecución principal
 if __name__ == "__main__":
     # Configuración de tu entorno de BigQuery
