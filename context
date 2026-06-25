@@ -1,0 +1,48 @@
+from pydantic import BaseModel, Field, IPvAnyAddress, HttpUrl
+from datetime import datetime
+from typing import Optional
+
+# 1. Define the Pydantic schema
+class ApacheLog(BaseModel):
+    ip_address: IPvAnyAddress
+    client_identity: Optional[str] = None
+    userid: Optional[str] = None
+    timestamp: datetime
+    method: str
+    request_uri: str
+    http_version: str
+    status_code: int = Field(ge=100, le=599)
+    userAgent: Optional[str] = None
+    referer: Optional[str] = None
+    response_size: Optional[int] = None
+
+
+import apachelogs
+
+
+def parse_apachelogs(line: str) -> Optional[ApacheLog]:
+    try:
+        log_format = '%h %l %u %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" "%u"'
+        parser = apachelogs.LogParser(log_format,errors=None)
+        log_line_data = parser.parse(line)
+        request_elements = log_line_data.request_line.split()
+        return ApacheLog(
+            ip_address=log_line_data.remote_host,
+            client_identity=log_line_data.remote_logname,
+            userid=log_line_data.remote_user,
+            timestamp=log_line_data.request_time,
+            method=request_elements[0],
+            request_uri=request_elements[1],
+            http_version=request_elements[2],
+            status_code=log_line_data.status,
+            userAgent=log_line_data.headers_in["User-Agent"],
+            referer=log_line_data.headers_in["Referer"],
+            response_size=log_line_data.bytes_sent
+            
+        )
+    except Exception as e:
+        print(f"Failed to parse line: {e}")
+        return None
+
+pprint(parse_apachelogs(sample_log))
+
