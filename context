@@ -1,5 +1,5 @@
 from pprint import pprint
-from pydantic import BaseModel, Field, IPvAnyAddress, HttpUrl
+from pydantic import BaseModel, Field, IPvAnyAddress
 from datetime import datetime
 from typing import Optional
 import apachelogs
@@ -21,31 +21,37 @@ class ApacheLog(BaseModel):
 # 2. Función para parsear los logs
 def parse_apachelogs(line: str) -> Optional[ApacheLog]:
     try:
+        # Formato ajustado para coincidir con tus logs de ejemplo
         log_format = '%h %l %u %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" "%u"'
-        parser = apachelogs.LogParser(log_format, errors=None)
+        parser = apachelogs.LogParser(log_format)
         log_line_data = parser.parse(line)
+        
+        # Separar la petición HTTP de forma segura
         request_elements = log_line_data.request_line.split()
+        method = request_elements[0] if len(request_elements) > 0 else "-"
+        request_uri = request_elements[1] if len(request_elements) > 1 else "-"
+        http_version = request_elements[2] if len(request_elements) > 2 else "-"
         
         return ApacheLog(
             ip_address=log_line_data.remote_host,
             client_identity=log_line_data.remote_logname,
             userid=log_line_data.remote_user,
             timestamp=log_line_data.request_time,
-            method=request_elements[0],
-            request_uri=request_elements[1],
-            http_version=request_elements[2],
+            method=method,
+            request_uri=request_uri,
+            http_version=http_version,
             status_code=log_line_data.status,
-            userAgent=log_line_data.headers_in["User-Agent"],
-            referer=log_line_data.headers_in["Referer"],
+            # Usar .get() previene KeyError si el header no existe
+            userAgent=log_line_data.headers_in.get("User-Agent"),
+            referer=log_line_data.headers_in.get("Referer"),
             response_size=log_line_data.bytes_sent
         )
     except Exception as e:
-        print(f"Failed to parse line: {e}")
+        print(f"Error al parsear la línea: {e}")
         return None
 
 # 3. Bloque de ejecución principal para las pruebas
 if __name__ == "__main__":
-    # Asignamos los logs a una variable como un string multilínea
     sample_logs = """109.169.248.247 - - [12/Dec/2015:18:25:11 +0100] "GET /administrator/ HTTP/1.1" 200 4263 "-" "Mozilla/5.0 (Windows NT 6.0; rv:34.0) Gecko/20100101 Firefox/34.0" "-"
 109.169.248.247 - - [12/Dec/2015:18:25:11 +0100] "POST /administrator/index.php HTTP/1.1" 200 4494 "http://almhuette-raith.at/administrator/" "Mozilla/5.0 (Windows NT 6.0; rv:34.0) Gecko/20100101 Firefox/34.0" "-"
 46.72.177.4 - - [12/Dec/2015:18:31:08 +0100] "GET /administrator/ HTTP/1.1" 200 4263 "-" "Mozilla/5.0 (Windows NT 6.0; rv:34.0) Gecko/20100101 Firefox/34.0" "-"
@@ -57,8 +63,13 @@ if __name__ == "__main__":
 109.184.11.34 - - [12/Dec/2015:18:32:56 +0100] "GET /administrator/ HTTP/1.1" 200 4263 "-" "Mozilla/5.0 (Windows NT 6.0; rv:34.0) Gecko/20100101 Firefox/34.0" "-"
 """
     
-    # Iteramos sobre cada línea (omitiendo líneas vacías) para probar la función
+    # Iteramos sobre cada línea omitiendo líneas vacías
     for line in sample_logs.strip().split('\n'):
+        if not line: continue
+        
         print(f"\nProcesando IP: {line.split()[0]}")
         parsed_log = parse_apachelogs(line)
-        pprint(parsed_log.dict() if parsed_log else None)
+        
+        if parsed_log:
+            # Usar model_dump() en lugar de dict() para Pydantic V2
+            pprint(parsed_log.model_dump())
