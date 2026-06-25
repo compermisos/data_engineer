@@ -94,6 +94,54 @@ def process_logs_to_avro(input_file_path: str, output_avro_path: str):
         
     print("¡Proceso completado exitosamente!")
 
+from pydantic import BaseModel
+from typing import get_args, get_origin, Union
+from datetime import datetime
+from pydantic.networks import IPvAnyAddress
+
+def generar_esquema_avro(modelo: type[BaseModel], nombre_esquema: str = "ApacheLog") -> dict:
+    # Mapeo básico de tipos de Python/Pydantic a tipos de Avro
+    type_mapping = {
+        str: "string",
+        int: "int",
+        float: "float",
+        bool: "boolean",
+        datetime: "string", # Avro maneja fechas comúnmente como strings o logicalTypes
+        IPvAnyAddress: "string" # Pydantic IP address se guarda como string
+    }
+
+    fields = []
+    
+    for nombre_campo, field_info in modelo.model_fields.items():
+        tipo_anotacion = field_info.annotation
+        
+        # Verificar si es Optional (Union[Tipo, NoneType])
+        es_opcional = get_origin(tipo_anotacion) is Union and type(None) in get_args(tipo_anotacion)
+        
+        # Extraer el tipo real ignorando el NoneType
+        tipo_base = get_args(tipo_anotacion)[0] if es_opcional else tipo_anotacion
+        
+        # Obtener el tipo de Avro
+        avro_type = type_mapping.get(tipo_base, "string") 
+        
+        # Si el campo es opcional o tiene un default de None, Avro requiere una lista ["null", tipo]
+        if es_opcional or not field_info.is_required():
+            avro_type = ["null", avro_type]
+            
+        fields.append({
+            "name": nombre_campo,
+            "type": avro_type
+        })
+
+    return {
+        "doc": f"Esquema autogenerado para {nombre_esquema}",
+        "name": nombre_esquema,
+        "type": "record",
+        "fields": fields
+    }
+
+# Uso:
+# avro_schema_dinamico = generar_esquema_avro(ApacheLog)
 # 5. Bloque de ejecución principal
 if __name__ == "__main__":
     # Nombres de los archivos de entrada y salida
