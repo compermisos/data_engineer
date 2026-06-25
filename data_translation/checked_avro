@@ -1,0 +1,108 @@
+import fastavro
+import apachelogs
+from pydantic import BaseModel, Field, IPvAnyAddress
+from datetime import datetime
+from typing import Optional
+
+# 1. Definir el esquema de Pydantic
+class ApacheLog(BaseModel):
+    ip_address: IPvAnyAddress
+    client_identity: Optional[str] = None
+    userid: Optional[str] = None
+    timestamp: datetime
+    method: str
+    request_uri: str
+    http_version: str
+    status_code: int = Field(ge=100, le=599)
+    userAgent: Optional[str] = None
+    referer: Optional[str] = None
+    response_size: Optional[int] = None
+
+# 2. Esquema Avro (Mapeado desde el modelo Pydantic)
+avro_schema = {
+    "doc": "Apache Access Log",
+    "name": "ApacheLog",
+    "type": "record",
+    "fields": [
+        {"name": "ip_address", "type": "string"},
+        {"name": "client_identity", "type": ["null", "string"]},
+        {"name": "userid", "type": ["null", "string"]},
+        {"name": "timestamp", "type": "string"},
+        {"name": "method", "type": "string"},
+        {"name": "request_uri", "type": "string"},
+        {"name": "http_version", "type": "string"},
+        {"name": "status_code", "type": "int"},
+        {"name": "userAgent", "type": ["null", "string"]},
+        {"name": "referer", "type": ["null", "string"]},
+        {"name": "response_size", "type": ["null", "int"]}
+    ]
+}
+
+# 3. Función para parsear los logs
+def parse_apachelogs(line: str) -> Optional[ApacheLog]:
+    try:
+        log_format = '%h %l %u %t "%r" %s %b "%{Referer}i" "%{User-Agent}i" "%u"'
+        parser = apachelogs.LogParser(log_format)
+        log_line_data = parser.parse(line)
+        
+        request_elements = log_line_data.request_line.split()
+        method = request_elements[0] if len(request_elements) > 0 else "-"
+        request_uri = request_elements[1] if len(request_elements) > 1 else "-"
+        http_version = request_elements[2] if len(request_elements) > 2 else "-"
+        
+        return ApacheLog(
+            ip_address=log_line_data.remote_host,
+            client_identity=log_line_data.remote_logname,
+            userid=log_line_data.remote_user,
+            timestamp=log_line_data.request_time,
+            method=method,
+            request_uri=request_uri,
+            http_version=http_version,
+            status_code=log_line_data.status,
+            userAgent=log_line_data.headers_in.get("User-Agent"),
+            referer=log_line_data.headers_in.get("Referer"),
+            response_size=log_line_data.bytes_sent
+        )
+    except Exception as e:
+        print(f"Error al parsear la línea: {e}")
+        return None
+
+# 4. Función para procesar el archivo y exportar a Avro
+def process_logs_to_avro(input_file_path: str, output_avro_path: str):
+    parsed_schema = fastavro.parse_schema(avro_schema)
+    records_to_write = []
+
+    print(f"Leyendo logs desde: {input_file_path}...")
+    
+    with open(input_file_path, 'r', encoding='utf-8') as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+                
+            parsed_log = parse_apachelogs(line)
+            if parsed_log:
+                # model_dump(mode='json') convierte datetime e IP a strings automáticamente
+                log_dict = parsed_log.model_dump(mode='json')
+                records_to_write.append(log_dict)
+
+    print(f"Se procesaron {len(records_to_write)} registros válidos.")
+    print(f"Escribiendo archivo Avro en: {output_avro_path}...")
+
+    with open(output_avro_path, 'wb') as avro_file:
+        fastavro.writer(avro_file, parsed_schema, records_to_write)
+        
+    print("¡Proceso completado exitosamente!")
+
+# 5. Bloque de ejecución principal
+if __name__ == "__main__":
+    # Nombres de los archivos de entrada y salida
+    ARCHIVO_ENTRADA = "access.log"
+    ARCHIVO_SALIDA = "logs_procesados.avro"
+    
+    # IMPORTANTE: Asegúrate de tener un archivo 'access.log' en el mismo directorio
+    # antes de ejecutar este script.
+    try:
+        process_logs_to_avro(ARCHIVO_ENTRADA, ARCHIVO_SALIDA)
+    except FileNotFoundError:
+        print(f"Error: No se encontró el archivo de entrada '{ARCHIVO_ENTRADA}'. Por favor, créalo o verifica la ruta.")
